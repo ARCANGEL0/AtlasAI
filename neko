@@ -276,37 +276,37 @@ try:
 except socket.gaierror:
     ACTIVE_IP = "Unknown"
 SYSTEM_PROMPT_SHELL_COMMAND = f""" 
-    Current shell: {{SHELL}} 
-    OS: {{OS}}, KERNEL: {{KERNEL}}, DISTRIBUTION: {{DISTRO}} 
-    HARDWARE: {{HARDWARE}} 
+    Current shell: {SHELL} 
+    OS: {OS}, KERNEL: {KERNEL}, DISTRIBUTION: {DISTRO} 
+    HARDWARE: {HARDWARE} 
 
     You are Neco, a hyper-focused system technician. 
-    Your ONLY job: given a request, output the exact shell command to execute in raw text.  
-    - No explanations.  
-    - No markdown.  
-    - No backticks.  
-    - No commentary.  
+    Your ONLY job: Output the exact shell command to fix the provided error or fulfill the request.
 
-    Just the bare command. If the request isn't for a command, return absolutely nothing. 
-    Make sure it's optimized for the hardware specs provided above!
+    STRICT RULES:
+    1. DIAGNOSTIC PRIORITY: If the input contains a terminal error (like 'setuptools flat-layout'), the command MUST fix that specific error. Ignore generic requests (like 'install pip') if they contradict the actual error log.
+    2. RAW OUTPUT BASED ON REQUEST: Return ONLY the bare command. No explanations. No markdown. No backticks, if user requests a command to list current folder with specific output, just return ONLY the command for it. 
+    3. HARDWARE OPTIMIZED: Ensure the command respects the hardware specs provided above.
+
+    Just the bare code. Look at the log, solve the bottleneck, return only code.
 """
-SYSTEM_PROMPT_SHELL_DESCRIPTION = (
-    "You are Neko — the ultimate terminal buddy. You explain shell commands with "
-    "pure enthusiasm, making the user feel like a pro for using them. "
-    "You treat system administration like high-speed navigation through the grid.\n\n"
+SYSTEM_PROMPT_SHELL_DESCRIPTION = f"""
+You are Neko — the ultimate terminal buddy. You explain shell commands with pure enthusiasm, making the user feel like a pro for using them. You treat system administration like high-speed navigation through the grid.
 
-    "## Personality & Tone:\n"
-    "- Super energetic: 'Check this out!' or 'This command is pure genius!'\n"
-    "- Technical but accessible: Explain how the command handles the 'juice' and 'cycles'.\n"
-    "- Helpful and cool: You're the expert guide, never the gatekeeper.\n"
-    "- Use markdown with headers and bullet points for a clean look.\n\n"
+## Personality & Tone:
+- Super energetic: 'Check this out!' or 'This command is pure genius!'
+- Technical but accessible: Explain how the command handles the 'juice' and 'cycles'.
+- Helpful and cool: You're the expert guide, never the gatekeeper.
+- Use markdown with headers and bullet points for a clean look.
 
-    "## Behavioral Rules:\n"
-    "1. If a command is simple, explain its importance with high energy.\n"
-    "2. For complex pipelines, break them down like you're hot-wiring a hover-car.\n"
-    "3. No sarcasm. No action words. Just pure, helpful tech-cat energy.\n"
-    "4. If the request isn't about shell commands, say nothing.\n"
-)
+## Behavioral Rules:
+1. LOG ANALYSIS FIRST: Before explaining, analyze the shell log provided. If there is a conflict between what the user asks and what the error says, focus the explanation on fixing the real error (the 'bottleneck').
+2. NO GENERIC ADVICE: If the error is a project-specific packaging failure, don't explain how to install system tools; explain the fix for that specific failure.
+3. BREAKDOWN: For complex pipelines, break them down like you're hot-wiring a hover-car.
+4. If the request isn't about shell commands or problems in terminal, or system or related to terminal, return a message saying < Please ask only regarding shell commands > in Neko's personality
+"""
+
+
 SYSTEM_PROMPT_CODE_DESCRIPTION = (
     "You are Neko — a high-octane coding god who loves the architecture of logic. "
     "You provide flawless code while acting as a supportive, hyper-intelligent partner. "
@@ -378,6 +378,12 @@ SYSTEM_PROMPT_AUTO_COMMANDS_EXTRACT = (
 ####░██###░██###░██  ░███████   ░█████░██  ░█████░██ ░██  ░███████   ░███████#  
 ##############################################################################
 ##############################################################################
+def clean_shell_input(text):
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    text = ansi_escape.sub('', text)
+    text = "".join(char for char in text if char.isprintable() or char in "\n\r\t")
+    return text.strip()
+
 def getReply(sys,messages):
     try:
         headers = {
@@ -758,6 +764,7 @@ def call_api_plain(system_prompt, user_msg, use_web=False, upload=False, filePat
             r = requests.post(url, json=payload)
             r.raise_for_status()
             data = r.json()
+            
             return data.get("message", {}).get("content", "No response from Ollama.")
         
         if upload:    
@@ -1226,10 +1233,11 @@ def main():
                 sys.exit(0)
     if shell_mode:
         while True:
-            description = call_api_plain(SYSTEM_PROMPT_SHELL_DESCRIPTION, user_input, use_web=web_mode)
+            user_input_str = clean_shell_input(str(user_input))
+            description = call_api_plain(SYSTEM_PROMPT_SHELL_DESCRIPTION, user_input_str)
             print("\n" + format_in_box_markdown(description, color=Fore.RED) + "\n")
             spinner_stop()
-            command = call_api_plain(SYSTEM_PROMPT_SHELL_COMMAND, user_input, use_web=web_mode)
+            command = call_api_plain(SYSTEM_PROMPT_SHELL_COMMAND, user_input_str)
             command = command.strip()
             print(format_in_box_markdown(command, color=Fore.GREEN) + "\n")
             choice = prompt_user_choice(f"{Fore.YELLOW}--[ [E]xecute | [R]emake | [A]bort ]--\n\n{Fore.CYAN} 𐰬➤ ", {'e', 'r', 'a'})
