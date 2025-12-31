@@ -5,7 +5,7 @@
 # ₊ ⊹ 𝗡𝗲𝗸𝗼_𝗖𝗟𝗜 
 <br>
 
-**AI assistant for your terminal, able to read images, generate and save code/scripts, run commands and answer or assist with any subject.**
+**AI assistant for your terminal, able to view, create or generate images; generate and save code/scripts; run commands and answer or assist with any subject.**
 
 [![Stars](https://img.shields.io/github/stars/ARCANGEL0/NekoCLI?style=for-the-badge&color=353535)](https://github.com/ARCANGEL0/NekoCLI)
 [![Watchers](https://img.shields.io/github/watchers/ARCANGEL0/NekoCLI?style=for-the-badge&color=353535)](https://github.com/ARCANGEL0/NekoCLI)
@@ -25,7 +25,7 @@
 ## ⬡ 𝗔𝗯𝗼𝘂𝘁 𝗡𝗘𝗞𝗢 
 
 NEKO is a lightweight, fast, and utility AI assistant for your terminal, to be acessible anytime you need.  
-It supports multiple flags and modes with a tidy formatted and colourful output in your terminal window such as persistent chat history, code mode, shell mode, web search, vision mode and an optional pentest agent (experimental).
+It supports multiple flags and modes with a tidy formatted and colourful output in your terminal window such as persistent chat history, code mode, shell mode, image edition and generation, web search, vision mode and an optional pentest agent (experimental).
 
 ## ᗢ Features
 
@@ -34,7 +34,7 @@ It supports multiple flags and modes with a tidy formatted and colourful output 
 - **Formatted output** – Easy visualization data on terminal, outputs are displayed in colorful colorama boxes.
 - **Persistent History** – Keeps context of chat if used with persistence flags. Chat history is saved in ~/.config/nekocli/chats.json
 - **Free endpoint using G4F.dev or Ollama** – All the AI logic is run with GPT 5.1 through G4F.dev providers, alternatively ollama can be used for offline mode, change base api of *:11434 by editing the OLLAMA_BASE_URL.
- 
+  **Media file handling** - Neko can not only visualize images, but also generate images and edit them based on user's prompt.
 ---
 
 ## ⟢ Installation .ᐟ
