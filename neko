@@ -15,7 +15,8 @@
 
                                                                                   
 # ===================== AUTO INSTALL PKGS   =====================
-
+import base64
+from typing import Optional
 import sys
 import os
 import subprocess
@@ -46,7 +47,7 @@ for mod, pip_name in REQUIRED_PACKAGES.items():
     ensure_package(mod, pip_name) # auto install modles 
 
 # ===================== STANDARD MODS =====================
-
+import urllib.parse
 import itertools
 import threading
 import time
@@ -191,6 +192,8 @@ Options:
 -c, --code | Code mode: get code with description + raw code output
 -s, --shell | Shell mode: get shell command with description + raw command
 -f, --file | Provide an image file for Neko to analyze along with prompt.
+-g, --generate | Image generation: ask Neko to criate an image at your will.
+-e, --edit | Image edition: ask Neko to edit an image for you, with a custom prompt.
 -a, --auto | Autonomous agent mode: interactive chat with auto pentest and reading self outputs (EXPERIMENTAL)
 -x, --agent | Agent mode: get pentest assistance on manual mode, sending questions and logs
 -i, --interactive | Interactive chat mode with history saved (~/.config/Neko/chats.json)
@@ -229,6 +232,7 @@ BASE_URL = "https://g4f.dev/api/groq/chat/completions"
 BASE_MODEL = "openai/gpt-oss-120b"
 HISTORY_DIR = os.path.expanduser("~/.config/nekocli")
 HISTORY_FILE = os.path.join(HISTORY_DIR, "chat.json")
+IMAGES_DIR = os.path.join(HISTORY_DIR, "images/")
 MAX_RETRIES = 10
 RETRY_DELAY = 10
 
@@ -717,6 +721,108 @@ SYSTEM_PROMPT_AUTO_COMMANDS_EXTRACT = (
 ##############################################################################
 ##############################################################################
 
+def open_image(image_path: str):
+    """
+    Opens the image file. ie addedd fix for cross platform compability
+    """
+    if not os.path.exists(image_path):
+        raise FileNotFoundError(f"Image file not found: {image_path}")
+    
+    try:
+        if sys.platform.startswith("linux"):
+            subprocess.run(["xdg-open", image_path], check=True)
+        elif sys.platform == "darwin": 
+            subprocess.run(["open", image_path], check=True)
+        elif sys.platform == "win32":
+            os.startfile(image_path)
+        else:
+            print(f"Unsupported OS for automatic opening: {sys.platform}")
+            print(f"Image saved at {image_path}")
+    except Exception as e:
+        print(f"Failed to open image: {e}")
+        print(f"Image saved at {image_path}")
+        
+def editImage(image_path: str, prompt: str) -> str:
+    if not os.path.exists(image_path):
+        raise FileNotFoundError(f"Image file not found: {image_path}")
+    with open(image_path, "rb") as img_file:
+        image_base64 = base64.b64encode(img_file.read()).decode("utf-8")
+    payload = {
+        "prompt": prompt,
+        "image": image_base64,
+    }
+    response = requests.post(
+        "http://129.146.165.179/edit",
+        headers={"Content-Type": "application/json"},
+        json=payload,
+    )
+    response.raise_for_status()
+    data = response.json()
+
+    if "response" not in data:
+        print(format_in_box_markdown(f"{Fore.RED}[!] Error: Invalid API response\nThe image url was not found!\n\n"))
+        sys.exit(1)
+    file_url = data["response"]
+    if not file_url.startswith("http"):
+        raise ValueError("Invalid file URL in API response")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "image",
+        "Sec-Fetch-Mode": "no-cors",
+        "Sec-Fetch-Site": "cross-site",
+        "Cache-Control": "max-age=0",
+    }
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            download_response = requests.get(file_url, headers=headers, timeout=30, stream=True)
+            download_response.raise_for_status()
+            break   
+        except requests.RequestException as e:
+            if attempt < max_retries - 1:
+                print(f"Download attempt {attempt + 1} failed: {e}. Retrying in 5 seconds...")
+                time.sleep(5)
+            else:
+                raise requests.RequestException(f"Failed to download image from {file_url} after {max_retries} attempts: {e}")
+    os.makedirs(IMAGES_DIR, exist_ok=True)
+    base_name = os.path.splitext(os.path.basename(image_path))[0]
+    edited_image_path = os.path.join(IMAGES_DIR, f"{base_name}_edited.png")  # Assuming PNG; adjust if needed
+    
+    with open(edited_image_path, "wb") as f:
+        for chunk in download_response.iter_content(chunk_size=8192):
+            f.write(chunk)
+    
+    return edited_image_path
+def genImage(prompt: str) -> str:
+    """
+    Generates an image from the received prompt using oculux API (might be unstable) and,
+    saves it to ~/.config/nekocli/images/,.
+    """
+
+    os.makedirs(IMAGES_DIR, exist_ok=True)
+
+    encoded_prompt = urllib.parse.quote_plus(prompt)
+    url = (
+        "https://dev.oculux.xyz/api/gptimage"
+        f"?prompt={encoded_prompt}"
+        "&ref="
+        "&seed="
+        "&width=1024"
+        "&height=1024"
+    )
+    response = requests.get(url, timeout=120)
+    response.raise_for_status()
+    filename = f"image_{int(time.time())}.png"
+    image_path = os.path.join(IMAGES_DIR, filename)
+    with open(image_path, "wb") as f:
+        f.write(response.content)
+    return image_path
 
 
 
@@ -1258,6 +1364,8 @@ def main():
     shell_mode = False
     code_mode = False
     web_mode = False
+    image_gen = False
+    image_edit = False
     auto_mode = False
     interactive_mode = False
     reset_history_flag = False
@@ -1278,7 +1386,32 @@ def main():
             code_mode = True
         elif arg in ("-w", "--web"):
             web_mode = True
-     
+        elif arg in ("-g", "--generate"):
+            image_gen = True
+            prompt_parts = []
+            j = i + 1
+            while j < len(args) and not args[j].startswith('-'):
+                prompt_parts.append(args[j])
+                j += 1
+            if not prompt_parts:
+                print(f"\n\n{Fore.RED}[!] Error:\n𐰬➤ -g flag requires a prompt for image generation{Style.RESET_ALL}\n\n")
+                sys.exit(1)
+            image_prompt = " ".join(prompt_parts)   
+        elif arg in ("-e", "--edit-image"):
+            image_edit = True
+            if i + 1 >= len(args):
+                print(f"\n\n{Fore.RED}[!] Error:\n𐰬➤ -e flag requires an image path and a prompt for image edition{Style.RESET_ALL}\n\n")
+                sys.exit(1)
+            image_dir = args[i + 1]  
+            prompt_parts = []
+            it = i + 2  
+            while it < len(args) and not args[it].startswith('-'):
+                prompt_parts.append(args[it])
+                it += 1
+            if not prompt_parts:
+                print(f"\n\n{Fore.RED}[!] Error:\n𐰬➤ -e flag requires a prompt after the image path{Style.RESET_ALL}\n\n")
+                sys.exit(1)
+            edit_prompt = " ".join(prompt_parts)
         elif arg in ("-f", "--file"):
             upload_mode = True
             try:
@@ -1286,7 +1419,7 @@ def main():
                 i += 1                 
                 
             except IndexError:
-                print(f"\n\n{Fore.RED}Error: -f flag requires a file path{Style.RESET_ALL}")
+                print(f"\n\n{Fore.RED}[!] Error:\n𐰬➤ -f flag requires a file path{Style.RESET_ALL}\n\n")
                 sys.exit(1)            
         elif arg in ("-a", "--auto"):
             auto_mode = True
@@ -1367,13 +1500,33 @@ def main():
     if upload_mode:
         spinner_start()
         if not user_input:
-            print(f"{Fore.RED}Error: provide a prompt when using -f <file>{Style.RESET_ALL}")
+            print(f"{Fore.RED}[!] Error:\n𐰬➤ provide a prompt when using -f <file>{Style.RESET_ALL}")
             sys.exit(1)
         result = call_api_plain(SYSTEM_PROMPT_CHAT, user_input,upload=True,filePath=file_path)
         spinner_stop()
         print(format_in_box_markdown(result))
         print("\n")
         sys.exit(0)
+    if image_gen: 
+        print(f"\n{Fore.YELLOW}Image will be sent in 5 minutes.\n")
+        print(format_in_box_markdown(f"Prompt for image gen:\n {Fore.CYAN}{image_prompt}{Style.RESET_ALL}  "))
+        spinner_start("G e n e r a t i n g  i m a g e")
+        image = genImage(image_prompt)
+        spinner_stop()
+        print(f"\n{Fore.CYAN}DONE [!]\n  ⬡ Opening image now . . .\n\n")
+        open_image(image)
+        sys.exit(1)
+    if image_edit: 
+        print(f"\n{Fore.YELLOW}Image will be sent in 5 minutes.\n")
+        print(format_in_box_markdown(f"Prompt for image edit:\n {Fore.CYAN}{edit_prompt}{Style.RESET_ALL}  "))
+        spinner_start("E d i t i n g  i m a g e")
+        image = editImage(image_dir,edit_prompt)
+        spinner_stop()
+        print(f"\n{Fore.CYAN}DONE [!]\n  ⬡ Opening image now . . .\n\n")
+        open_image(image)
+        sys.exit(1)
+
+        
     if auto_mode:
         spinner_start()
  
