@@ -67,6 +67,8 @@ Usage: neko [options] {question or prompt}
 | `-s` / `--shell` | Tells neko to interpret, generate and run shells commands based on user request. |
 | `-i` / `--interactive`   | Starts neko chat with persistent chat history saved on ~/.config/nekocli |
 | `-f` / `--file` | Sends an image along with user prompt for neko to analyze. |
+| `-g` / `--generate` | Asks Neko to generate an image using a prompt |
+| `-e` / `--edit` | Asks Neko to edit an image based on your request |
 | `-a` / `--auto` | (EXPERIMENTAL FEATURE [!]) Autonomous multi-step offensive security mode, pass an initial prompt and let neko autorun commands and learn from outputs and generate next steps continuously over a target|
 | `-x` / `--agent` | Starts neko in cybersecurity agent mode, handling security, pentest questions and giving advices on command outputs |
 | `-r` / `--reset` | Erases chat history saved on ~/.config/nekocli |
@@ -79,6 +81,8 @@ $ neko -c "Python script to merge two CSV files" # generates a short text and fu
 $ neko -w "Latest CVE for OpenSSL in the last 2 months" # searches web for all possible index and findings on user prompt (CVE searches)
 $ neko -a "Help me in a pentest process, to enumerate this IP 10.10.x.x and get a webshell" # neko will provide suggestions and commands to be run and ask authorization to run them, after running he will self collect the logs, analyze and suggest next steps and repeat the cycle.
 $ neko -f /home/user/kitty.jpg "can you tell me the color of this cat?"
+$ neko -g "Please generate an image of Donald trump vs Joe Biden in a MMA Octagon ring, both fighting" # Image generation with Neko
+$ neko -e /home/user/selfie.jpg "Please change the background and remove the people on it" # Neko will modify the image with AI and obey the request to remove people on background
 $ neko -i "Tell me about Rutherford atom model" # after output, you will have option to ask a new question i.e: ''What about Schrodinger model?'' and continue conversation in context.
 $ neko -x "i need help to enumerate 192.168.0.10 for open ports" # neko will return a small and a list of commands to be run by user, and ask them to retrieve the logs by calling command again, as in example below
 $ cat nmapOutput.txt | neko -x "i have run nmap and found these info, what do you suggest now?" # Continues conversation saved on chat.json, analyzes nmap output and proceeds to suggest next steps
