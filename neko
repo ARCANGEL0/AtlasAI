@@ -14,7 +14,7 @@
 #
 
                                                                                   
-# ===================== AUTO INSTALL PKGS   =====================
+# ===================== AUTO INSTALL PKGS handler  =====================
 import base64
 from typing import Optional
 import sys
@@ -23,6 +23,8 @@ import shutil
 import subprocess
 import importlib
 import warnings
+
+
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 def ensure_pip():
