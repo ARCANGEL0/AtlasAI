@@ -24,18 +24,22 @@ import importlib
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
+def ensure_pip():
+    if shutil.which("pip") is None:
+        print("Ayo, pip was found in PATH. Please install python-pip and ensure pip is available, so I can install some tuff packages to start NekoCLI 🥀.")
+        sys.exit(1)
+
 def ensure_package(import_name, pip_name=None):
     pip_name = pip_name or import_name
     try:
         importlib.import_module(import_name)
     except ImportError:
-        print(f"[⮾]𐰷 MISSING MODULE!")
+        print("[⮾]𐰷 MISSING MODULE!")
         print(f"⬣ Installing missing dependency 🞛⮞ {pip_name}")
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", pip_name]
-        )
+        subprocess.check_call(["pip", "install", pip_name])
 
- 
+ensure_pip()
+
 REQUIRED_PACKAGES = {
     "requests": "requests",
     "colorama": "colorama",
@@ -44,7 +48,7 @@ REQUIRED_PACKAGES = {
 }
 
 for mod, pip_name in REQUIRED_PACKAGES.items():
-    ensure_package(mod, pip_name) # auto install modles 
+    ensure_package(mod, pip_name)
 
 # ===================== STANDARD MODS =====================
 import urllib.parse
