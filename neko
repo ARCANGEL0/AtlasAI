@@ -19,6 +19,7 @@ import base64
 from typing import Optional
 import sys
 import os
+import shutil
 import subprocess
 import importlib
 import warnings
