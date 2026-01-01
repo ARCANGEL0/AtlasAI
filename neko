@@ -27,7 +27,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 def ensure_pip():
     if shutil.which("pip") is None:
-        print("Ayo, pip was found in PATH. Please install python-pip and ensure pip is available, so I can install some tuff packages to start NekoCLI 🥀.")
+        print("\n\nAyo, pip was found in PATH. Please install python-pip and ensure pip is available, so I can install some tuff packages to start NekoCLI 🥀\n\n.")
         sys.exit(1)
 
 def ensure_package(import_name, pip_name=None):
@@ -37,7 +37,7 @@ def ensure_package(import_name, pip_name=None):
     except ImportError:
         print("[⮾]𐰷 MISSING MODULE!")
         print(f"⬣ Installing missing dependency 🞛⮞ {pip_name}")
-        subprocess.check_call(["pip", "install", pip_name])
+        subprocess.check_call(["pip", "install", pip_name,"--break-system-packages"])
 
 ensure_pip()
 
