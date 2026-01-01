@@ -34,7 +34,7 @@ It supports multiple flags and modes with a tidy formatted and colourful output 
 - **Formatted output** – Easy visualization data on terminal, outputs are displayed in colorful colorama boxes.
 - **Persistent History** – Keeps context of chat if used with persistence flags. Chat history is saved in ~/.config/nekocli/chats.json
 - **Free endpoint using G4F.dev or Ollama** – All the AI logic is run with GPT 5.1 through G4F.dev providers, alternatively ollama can be used for offline mode, change base api of *:11434 by editing the OLLAMA_BASE_URL.
-  **Media file handling** - Neko can not only visualize images, but also generate images and edit them based on user's prompt.
+- **Media file handling** - Neko can not only visualize images, but also generate images and edit them based on user's prompt.
 ---
 
 ## ⟢ Installation .ᐟ
