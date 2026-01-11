@@ -157,7 +157,7 @@ def spinner_stop():
 
 
 ##########################
-###### HELP MENU ###########################
+###### e MENU ###########################
 def print_help_menu():
     help_text = """
               ▒                                         ▓            
@@ -198,6 +198,7 @@ Options:
 -w, --web | Use the web search module 
 -c, --code | Code mode: get code with description + raw code output
 -s, --shell | Shell mode: get shell command with description + raw command
+-so, --shell-only | Only shell command: return only a bare shell command without description.
 -f, --file | Provide an image file for Neko to analyze along with prompt.
 -g, --generate | Image generation: ask Neko to criate an image at your will.
 -e, --edit | Image edition: ask Neko to edit an image for you, with a custom prompt.
@@ -916,50 +917,61 @@ def sendImage(payload, image_url):
         return resp["choices"][0]["message"]["content"]
     except Exception as e:
         return f"ㄖ 𝖤𝗋𝗋𝗈𝗋: {str(e)}"
-    
+
 def raw_input(prompt=""):
     print(prompt, end="", flush=True)
-
-    if os.name == "nt":
-        buf = ""
-        while True:
-            ch = msvcrt.getwch()
-            if ch in ("\r", "\n"):
-                print()
-                return buf
-            elif ch == "\x08":  # backspace
-                if buf:
-                    buf = buf[:-1]
-                    print("\b \b", end="", flush=True)
-            elif ch == "\x03":
-                raise KeyboardInterrupt
+    try:
+        with open('/dev/tty', 'r') as tty_fd:
+            if IS_WINDOWS:
+                import msvcrt
+                buf = ""
+                while True:
+                    ch = msvcrt.getwch()
+                    if ch in ("\r", "\n"):
+                        print()
+                        return buf
+                    elif ch == "\x08":  # backspace
+                        if buf:
+                            buf = buf[:-1]
+                            print("\b \b", end="", flush=True)
+                    elif ch == "\x03":
+                        raise KeyboardInterrupt
+                    else:
+                        buf += ch
+                        print(ch, end="", flush=True)
             else:
-                buf += ch
-                print(ch, end="", flush=True)
-    else:
-        fd = sys.stdin.fileno()
-        old = termios.tcgetattr(fd)
-        buf = ""
+                import termios
+                import tty
+                try:
+                    import readline
+                except ImportError:
+                    pass
+                fd = tty_fd.fileno()
+                old = termios.tcgetattr(fd)
+                buf = ""
+                try:
+                    tty.setcbreak(fd)
+                    while True:
+                        ch = tty_fd.read(1)
+                        if ch in ("\n", "\r"):
+                            print()
+                            return buf
+                        elif ch in ("\x7f", "\x08"):
+                            if buf:
+                                buf = buf[:-1]
+                                print("\b \b", end="", flush=True)
+                        elif ch == "\x03":
+                            raise KeyboardInterrupt
+                        else:
+                            buf += ch
+                            print(ch, end="", flush=True)
+                finally:
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    except (OSError, IOError):
         try:
-            tty.setcbreak(fd)
-            while True:
-                ch = sys.stdin.read(1)
-                if ch in ("\n", "\r"):
-                    print()
-                    return buf
-                elif ch in ("\x7f", "\x08"):
-                    if buf:
-                        buf = buf[:-1]
-                        print("\b \b", end="", flush=True)
-                elif ch == "\x03":
-                    raise KeyboardInterrupt
-                else:
-                    buf += ch
-                    print(ch, end="", flush=True)
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old)
-
-
+            return input()
+        except EOFError:
+            return None            
 
 def ensure_history_dir():
     if not os.path.exists(HISTORY_DIR):
@@ -1100,37 +1112,44 @@ def pentest_agent_mode(user_input):
     
     
     
+
+
 def prompt_user_choice(prompt_str, choices):
     print(f"{Fore.YELLOW}{prompt_str}{Style.RESET_ALL}", end=" ", flush=True)
-    try:
- 	     while True:
-                choice = read_tty_line().strip().lower()
-                if not choice:
-                    return None
-                choice = choice.strip().lower()
-                if choice in choices:
-                    return choice
-                else:
-                    print(f"Please enter one of {choices}: ", end="", flush=True)
-    except Exception:
-        while True:
-            choice = input().strip().lower()
+    while True: 
+        try:
+            choice = raw_input("") 
+            if choice is None:
+                continue
+            choice = choice.strip().lower()
+            if not choice:
+                continue 
             if choice in choices:
                 return choice
-            print(f"Please enter one of {choices}: ", end="", flush=True)
+            else:
+                print(f"Please enter one of {choices}: ", end="", flush=True)
+        except Exception:
+            while True:  
+                try:
+                    choice = raw_input(f"Please enter one of {choices}: ")  
+                    choice = choice.strip().lower()
+                    if choice in choices:
+                        return choice
+                except KeyboardInterrupt:
+                    continue 
 
 def prompt_filename():
-    prompt = format_in_box_markdown("What will be the filename ?", color=Fore.CYAN)
-    print(prompt)
-    try:
-            filename = read_tty_line()
+    while True:
+        try:
+            filename = raw_input("What will be the filename ? ").strip()
             if filename:
-                return filename.strip()
+                return filename
             else:
-                return None
-    except Exception:
-        return input("Filename: ").strip()
-
+                print(f"{Fore.RED}Filename cannot be empty. Please try again.{Style.RESET_ALL}")
+        except KeyboardInterrupt:
+            print(f"\n{Fore.RED}Save cancelled.{Style.RESET_ALL}")
+            return None
+            
 
 def upload_file(filepath: str) -> str:
     if not os.path.isfile(filepath):
@@ -1369,6 +1388,7 @@ def clear_history():
 def main():
     args = sys.argv[1:]
     shell_mode = False
+    only_command = False
     code_mode = False
     web_mode = False
     image_gen = False
@@ -1389,6 +1409,9 @@ def main():
             sys.exit(0)
         elif arg in ("-s", "--shell"):
             shell_mode = True
+        elif arg in ("-so", "--shell-only"):
+            shell_mode = True
+            only_command = True 
         elif arg in ("-c", "--code"):
             code_mode = True
         elif arg in ("-w", "--web"):
@@ -1460,19 +1483,19 @@ def main():
         spinner_stop()
         print_help_menu()
         sys.exit(0)
-    
+
     if interactive_mode:
         spinner_start()
-  
         history = load_history()
         if user_input:
             history.append({"role": "user", "content": user_input})
+        
+        # Check if stdin is a TTY. If not (piped), process once and exit.
         while True:
             system_prompt = SYSTEM_PROMPT_CHAT
             messages = history.copy()
             try:
-                reply = getReply(system_prompt,messages)
-   
+                reply = getReply(system_prompt, messages)
             except Exception as e:
                 reply = f"Error: {e}"
             spinner_stop()
@@ -1533,10 +1556,9 @@ def main():
         open_image(image)
         sys.exit(1)
 
-        
+            
     if auto_mode:
         spinner_start()
- 
         if not user_input:
             print(f"{Fore.RED}Please provide a prompt for autonomous mode (-a).{Style.RESET_ALL}")
             sys.exit(1)
@@ -1547,6 +1569,7 @@ def main():
         else:
             if history[-1]["role"] == "assistant":
                 history.append({"role": "user", "content": user_input})
+        
         while True:
             assistant_full = pentest_call(history)
             if not assistant_full:
@@ -1613,54 +1636,32 @@ def main():
                 history = history[:last_user_idx + 1]
                 user_input = history[last_user_idx]["content"]
                 try:
-                
-                    headers = {
-                    "Content-Type": "application/json"
-                    }
-
-                    data = {
-                        "model": BASE_MODEL,
-                        "messages": history,
-                        "stream": False  
-                    }
-                            
+                    headers = {"Content-Type": "application/json"}
+                    data = {"model": BASE_MODEL, "messages": history, "stream": False}
                     for attempt in range(MAX_RETRIES):
-                            try:
-                                r = requests.post(BASE_URL, headers=headers, json=data, timeout=60)
-                                if r.status_code == 429:
+                        try:
+                            r = requests.post(BASE_URL, headers=headers, json=data, timeout=60)
+                            if r.status_code == 429:
+                                time.sleep(RETRY_DELAY)
+                                continue
+                            r.raise_for_status()
+                            response_json = r.json()
+                            if 'error' in response_json:
+                                error_message = response_json['error'].get('message', '')
+                                if "most wanted" in error_message or "Rate limit" in error_message:
                                     time.sleep(RETRY_DELAY)
                                     continue
-                                r.raise_for_status()
-                                response_json = r.json()
-                                if 'error' in response_json:
-                                    error_message = response_json['error'].get('message', '')
-                                    if "most wanted" in error_message or "Rate limit" in error_message:
-                                        time.sleep(RETRY_DELAY)
-                                        continue
-                                    else:
-                                        continue
-                                choices = response_json.get('choices', [])
-                                if choices:
-                                    regenerated_response = choices[0].get('message', {}).get('content', "[ <!> Error with response, please try again ]")
-                                    return regenerated_response
                                 else:
                                     continue
-
-                            except requests.exceptions.HTTPError as e:
-                                ### retry attmpt
-                                if attempt < MAX_RETRIES - 1:
-                                    time.sleep(RETRY_DELAY)
-                                    continue
-                                return f"[❌] ⬡  HTTP Error: {e}"
-                                
-                            except requests.exceptions.RequestException as e:
-                                return f"[❌] ⬡  Connection Error: {e}"
-                                
-                            except json.JSONDecodeError:
-                                return "[❌] ⬡  < Error: Invalid JSON response from server, please try again. >"
-
-                    return "[❌] ⬡  Error: Max retries reached due to rate limits or blocks."
-            
+                            choices = response_json.get('choices', [])
+                            if choices:
+                                regenerated_response = choices[0].get('message', {}).get('content', "[ <!> Error with response, please try again ]")
+                                break
+                        except (requests.exceptions.HTTPError, requests.exceptions.RequestException, json.JSONDecodeError):
+                            if attempt < MAX_RETRIES - 1:
+                                time.sleep(RETRY_DELAY)
+                            continue
+                    regenerated_response = regenerated_response if 'regenerated_response' in locals() else "[ <!> Error with response, please try again ]"
                 except Exception as e:
                     regenerated_response = f"Error: {e}"
                 print(format_in_box_markdown(regenerated_response, color=Fore.RED))
@@ -1697,55 +1698,32 @@ def main():
                 )
                 history.append({"role": "user", "content": composed_prompt})
                 try:
-                    
-
-                    headers = {
-                    "Content-Type": "application/json"
-                    }
-
-                    data = {
-                        "model": BASE_MODEL,
-                        "messages": history,
-                        "stream": False  
-                    }
-                            
+                    headers = {"Content-Type": "application/json"}
+                    data = {"model": BASE_MODEL, "messages": history, "stream": False}
                     for attempt in range(MAX_RETRIES):
-                            try:
-                                r = requests.post(BASE_URL, headers=headers, json=data, timeout=60)
-                                if r.status_code == 429:
+                        try:
+                            r = requests.post(BASE_URL, headers=headers, json=data, timeout=60)
+                            if r.status_code == 429:
+                                time.sleep(RETRY_DELAY)
+                                continue
+                            r.raise_for_status()
+                            response_json = r.json()
+                            if 'error' in response_json:
+                                error_message = response_json['error'].get('message', '')
+                                if "most wanted" in error_message or "Rate limit" in error_message:
                                     time.sleep(RETRY_DELAY)
                                     continue
-                                r.raise_for_status()
-                                response_json = r.json()
-                                if 'error' in response_json:
-                                    error_message = response_json['error'].get('message', '')
-                                    if "most wanted" in error_message or "Rate limit" in error_message:
-                                        time.sleep(RETRY_DELAY)
-                                        continue
-                                    else:
-                                        continue
-                                choices = response_json.get('choices', [])
-                                if choices:
-                                    answer = choices[0].get('message', {}).get('content', "[ <!> Error with response, please try again ]")
-                                    return answer
                                 else:
                                     continue
-
-                            except requests.exceptions.HTTPError as e:
-                                ### retry attmpt
-                                if attempt < MAX_RETRIES - 1:
-                                    time.sleep(RETRY_DELAY)
-                                    continue
-                                return f"[❌] ⬡  HTTP Error: {e}"
-                                
-                            except requests.exceptions.RequestException as e:
-                                return f"[❌] ⬡  Connection Error: {e}"
-                                
-                            except json.JSONDecodeError:
-                                return "[❌] ⬡  < Error: Invalid JSON response from server, please try again. >"
-
-                    return "[❌] ⬡  Error: Max retries reached due to rate limits or blocks."
-            
+                            choices = response_json.get('choices', [])
+                            if choices:
+                                answer = choices[0].get('message', {}).get('content', "[ <!> Error with response, please try again ]")
+                                break
+                        except (requests.exceptions.HTTPError, requests.exceptions.RequestException, json.JSONDecodeError):
+                            if attempt < MAX_RETRIES - 1:
+                                time.sleep(RETRY_DELAY)
+                            continue
+                    answer = answer if 'answer' in locals() else "[ <!> Error with response, please try again ]"
                 except Exception as e:
                     answer = f"Error: {e}"
                 print(format_in_box_markdown(answer, color=Fore.RED))
@@ -1756,16 +1734,19 @@ def main():
                 print(format_in_box_markdown(f"\n\n{Fore.YELLOW}ㅿ 𝙴 𝚡 𝚒 𝚝 𝚒 𝚗 𝚐..."))
                 clear_history()
                 sys.exit(0)
+
     if shell_mode:
         spinner_start()
         while True:
             user_input_str = clean_shell_input(str(user_input))
-            description = call_api_plain(SYSTEM_PROMPT_SHELL_DESCRIPTION, user_input_str)
-            print("\n" + format_in_box_markdown(description, color=Fore.RED) + "\n")
+            if not only_command:
+                description = call_api_plain(SYSTEM_PROMPT_SHELL_DESCRIPTION, user_input_str)
+                print("\n" + format_in_box_markdown(description, color=Fore.RED) + "\n")
             spinner_stop()
             command = call_api_plain(SYSTEM_PROMPT_SHELL_COMMAND, user_input_str)
             command = command.strip()
             print(format_in_box_markdown(command, color=Fore.GREEN) + "\n")
+            
             choice = prompt_user_choice(f"{Fore.YELLOW}--[ [E]xecute | [R]emake | [A]bort ]--\n\n{Fore.CYAN} 𐰬➤ ", {'e', 'r', 'a'})
             if choice == 'e':
                 print(f"{Fore.GREEN}Executing command...{Style.RESET_ALL}")
@@ -1780,6 +1761,7 @@ def main():
                 print(format_in_box_markdown(f"\n\n{Fore.YELLOW}ㅿ 𝙰 𝚋 𝚘 𝚛 𝚝 𝚎 𝚍  /  𝚋 𝚢 /  𝚞 𝚜 𝚎 𝚛  . . . "))
                 break
 
+
     elif code_mode:
         spinner_start()
         while True:
@@ -1787,21 +1769,22 @@ def main():
             raw_code = extract_raw_code(unformattedCode)
             spinner_stop()
             print(format_in_box_markdown(raw_code, color=Fore.GREEN) + "\n")
+            
             choice = prompt_user_choice(f"{Fore.YELLOW}--[ [S]ave | [N]ew | [Q]uit ]--\n\n{Fore.CYAN} 𐰬➤ ", {'s', 'n', 'q'})
+
             if choice == 's':
-                while True:
-                    filename = prompt_filename()
-                    if filename:
-                        try:
-                            with open(filename, 'w', encoding='utf-8') as f:
-                                f.write(raw_code)
-                            print(f"{Fore.GREEN}Code saved to '{filename}'{Style.RESET_ALL}")
-                        except Exception as e:
-                            print(f"{Fore.RED}Failed to save file: {e}{Style.RESET_ALL}")
-                        break  
-                    else:
-                        print(f"{Fore.RED}Filename cannot be empty. Please try again.{Style.RESET_ALL}")
-                break  
+                filename = prompt_filename()
+                if filename:
+                    try:
+                        with open(filename, 'w', encoding='utf-8') as f:
+                            f.write(raw_code)
+                        print(f"{Fore.GREEN}Code saved to '{filename}'{Style.RESET_ALL}")
+                    except Exception as e:
+                        print(f"{Fore.RED}Failed to save file: {e}{Style.RESET_ALL}")
+                else:
+                    print(f"{Fore.YELLOW}Save operation cancelled.{Style.RESET_ALL}")
+                break
+             
             elif choice == 'n':
                 continue 
             else:
